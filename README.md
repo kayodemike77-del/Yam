@@ -2,6 +2,8 @@
 
 This repository provides automated builds of [curl-impersonate](https://github.com/lwthiker/curl-impersonate) for Windows using GitHub Actions.
 
+> **⏱️ Important**: Builds take 30-60 minutes. Don't worry - this is normal! See [FAQ](docs/FAQ.md) for common questions.
+
 ## What is curl-impersonate?
 
 curl-impersonate is a special build of curl that can impersonate the four major browsers: Chrome, Edge, Safari & Firefox. It does this by:
