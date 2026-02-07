@@ -2,8 +2,6 @@ name: Build curl-impersonate for Windows
 
 on:
   workflow_dispatch:  # Manual trigger only
-  push:
-    branches: [ main ]
 
 jobs:
   build-firefox-msys2:
@@ -130,9 +128,12 @@ jobs:
           find . -name "curl-impersonate-*" -type f -exec cp {} /tmp/artifacts/ \; || true
           find . -name "curl_chrome*" -type f -exec cp {} /tmp/artifacts/ \; || true
           find . -name "curl_edge*" -type f -exec cp {} /tmp/artifacts/ \; || true
+          find . -name "curl_safari*" -type f -exec cp {} /tmp/artifacts/ \; || true
           # Also check in install location
           find /mingw64/bin -name "curl-impersonate-*" -type f -exec cp {} /tmp/artifacts/ \; 2>/dev/null || true
           find /mingw64/bin -name "curl_chrome*" -type f -exec cp {} /tmp/artifacts/ \; 2>/dev/null || true
+          find /mingw64/bin -name "curl_edge*" -type f -exec cp {} /tmp/artifacts/ \; 2>/dev/null || true
+          find /mingw64/bin -name "curl_safari*" -type f -exec cp {} /tmp/artifacts/ \; 2>/dev/null || true
           ls -lah /tmp/artifacts/
           
       - name: Upload Chrome artifacts

@@ -70,9 +70,19 @@ If you can't access artifacts, trigger your own build!
 
 **Try both** if one doesn't work - different sites may check for different browsers!
 
-### Q: The executables don't have a `.exe` extension. Is this normal?
+### Q: The executables in the artifact don't have a `.exe` extension. What should I do?
 
-**A:** In the MSYS2 environment (where the builds run), executables may not always have the `.exe` extension in the artifact collection. However, when you download and extract on Windows, they should be usable. If not, try renaming them to add `.exe`.
+**A:** The curl-impersonate build process creates wrapper scripts (without .exe) and actual executables (with .exe). When you download and extract the artifacts:
+
+1. **Look for files with `.exe` extension** - these are the actual Windows executables
+2. **Files without `.exe`** are usually shell scripts - you can ignore them on Windows
+
+If you only see files without `.exe` extension:
+1. The build may not have completed correctly
+2. Try re-running the workflow
+3. Check the build logs for errors
+
+**Important:** On Windows, you must use the `.exe` files. The shell scripts won't work in Command Prompt or PowerShell.
 
 ### Q: Do I need to download both artifacts?
 
