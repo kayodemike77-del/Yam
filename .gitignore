@@ -1,0 +1,45 @@
+# Build artifacts
+build/
+build-*/
+artifacts/
+*.exe
+*.dll
+*.lib
+*.a
+*.so
+*.dylib
+
+# curl-impersonate source
+curl-impersonate/
+curl-impersonate-win/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Windows specific
+Thumbs.db
+desktop.ini
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake
+
+# Ninja
+.ninja_deps
+.ninja_log
+
+# MSYS2
+msys64/
