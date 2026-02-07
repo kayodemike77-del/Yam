@@ -2,77 +2,85 @@ name: Build curl-impersonate for Windows
 
 on:
   workflow_dispatch:  # Manual trigger only
+  push:
+    branches: [ main ]
 
 jobs:
-  build-chrome:
-    name: Build curl-impersonate (Chrome/BoringSSL) for Windows
+  build-firefox-msys2:
+    name: Build Firefox variant via MSYS2
     runs-on: windows-latest
-    
+    timeout-minutes: 120
+
     steps:
-      - name: Install build tools
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-go
+            mingw-w64-x86_64-nss
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-pip
+            make
+            autoconf
+            automake
+            libtool
+            pkg-config
+            perl
+            git
+            patch
+            unzip
+            wget
+
+      - name: Install gyp-next
+        shell: msys2 {0}
         run: |
-          choco install nasm strawberryperl cmake ninja golang -y
-          echo "C:\Program Files\NASM" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
-          echo "C:\Strawberry\perl\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
-          echo "C:\Program Files\Go\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
+          pip install gyp-next
 
       - name: Clone curl-impersonate
+        shell: msys2 {0}
         run: |
           git clone --depth 1 https://github.com/lwthiker/curl-impersonate.git
           cd curl-impersonate
-          git submodule update --init --depth 1
+          ls -la
 
-      - name: Build BoringSSL
-        shell: cmd
+      - name: Configure and Build Firefox variant
+        shell: msys2 {0}
         run: |
           cd curl-impersonate
-          mkdir build-boringssl && cd build-boringssl
-          cmake -GNinja -DCMAKE_BUILD_TYPE=Release ..\curl-impersonate\boringssl 2>nul || cmake -GNinja -DCMAKE_BUILD_TYPE=Release ..\boringssl
-          ninja crypto ssl
+          mkdir -p build
+          cd build
+          ../configure --prefix=/mingw64
+          make firefox-build
 
-      - name: Build nghttp2
-        shell: cmd
+      - name: Collect Firefox artifacts
+        shell: msys2 {0}
         run: |
-          cd curl-impersonate
-          mkdir build-nghttp2 && cd build-nghttp2
-          cmake -GNinja -DCMAKE_BUILD_TYPE=Release -DENABLE_LIB_ONLY=ON -DENABLE_STATIC_LIB=ON ..\nghttp2
-          ninja
-
-      - name: Build curl with impersonate patches
-        shell: cmd
-        run: |
-          cd curl-impersonate\curl
-          buildconf.bat
-          cmake -GNinja -DCMAKE_BUILD_TYPE=Release ^
-            -DCURL_USE_OPENSSL=ON ^
-            -DOPENSSL_ROOT_DIR=..\build-boringssl ^
-            -DUSE_NGHTTP2=ON ^
-            -DNGHTTP2_LIBRARY=..\build-nghttp2\lib ^
-            -DNGHTTP2_INCLUDE_DIR=..\nghttp2\lib\includes ^
-            -DBUILD_SHARED_LIBS=OFF ^
-            -DCURL_DISABLE_LDAP=ON ^
-            -DCURL_STATICLIB=ON ^
-            .
-          ninja
-
-      - name: Collect artifacts
-        run: |
-          mkdir artifacts
-          # Copy whatever was produced
-          Get-ChildItem -Path curl-impersonate -Recurse -Filter "curl.exe" | Copy-Item -Destination artifacts\curl-impersonate-chrome.exe
-          Get-ChildItem -Path curl-impersonate -Recurse -Filter "*.dll" | Copy-Item -Destination artifacts\
-          echo "=== Artifacts ==="
-          Get-ChildItem artifacts
-
-      - name: Upload artifacts
+          mkdir -p /tmp/artifacts
+          cd curl-impersonate/build
+          # Copy built curl executables
+          find . -name "curl-impersonate-*" -type f -exec cp {} /tmp/artifacts/ \; || true
+          find . -name "curl_ff*" -type f -exec cp {} /tmp/artifacts/ \; || true
+          # Also check in install location
+          find /mingw64/bin -name "curl-impersonate-*" -type f -exec cp {} /tmp/artifacts/ \; 2>/dev/null || true
+          find /mingw64/bin -name "curl_ff*" -type f -exec cp {} /tmp/artifacts/ \; 2>/dev/null || true
+          ls -lah /tmp/artifacts/
+          
+      - name: Upload Firefox artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: curl-impersonate-windows
-          path: artifacts/
+          name: curl-impersonate-firefox-windows
+          path: D:\a\_temp\msys64\tmp\artifacts\
+          if-no-files-found: error
 
-  build-alternative:
-    name: Build via MSYS2 (Firefox variant)
+  build-chrome-msys2:
+    name: Build Chrome variant via MSYS2
     runs-on: windows-latest
+    timeout-minutes: 120
 
     steps:
       - name: Setup MSYS2
@@ -100,55 +108,37 @@ jobs:
       - name: Clone curl-impersonate
         shell: msys2 {0}
         run: |
-          git clone --depth 1 https://github.com/AaronLai/curl-impersonate-win.git || \
           git clone --depth 1 https://github.com/lwthiker/curl-impersonate.git
+          cd curl-impersonate
+          ls -la
 
-      - name: Build (MSYS2)
+      - name: Configure and Build Chrome variant
         shell: msys2 {0}
         run: |
-          cd curl-impersonate* 
-          # Try the Windows-specific build if available
-          if [ -f "build.bat" ]; then
-            echo "Using Windows build script..."
-            cmd //c build.bat
-          elif [ -f "configure" ] || [ -f "Makefile" ]; then
-            echo "Using autotools..."
-            mkdir -p build && cd build
-            ../configure --prefix=/mingw64
-            make -j$(nproc) chrome-build || make -j$(nproc)
-          else
-            echo "Building BoringSSL + curl manually..."
-            
-            # Build BoringSSL
-            cd boringssl || cd third_party/boringssl
-            mkdir build && cd build
-            cmake -GNinja -DCMAKE_BUILD_TYPE=Release ..
-            ninja crypto ssl
-            cd ../..
-            
-            # Build curl
-            cd curl || cd third_party/curl
-            mkdir build && cd build  
-            cmake -GNinja \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DCURL_USE_OPENSSL=ON \
-              -DBUILD_SHARED_LIBS=OFF \
-              -DCURL_STATICLIB=ON \
-              ..
-            ninja
-          fi
+          cd curl-impersonate
+          mkdir -p build
+          cd build
+          ../configure --prefix=/mingw64
+          make chrome-build
 
-      - name: Collect and upload
+      - name: Collect Chrome artifacts
         shell: msys2 {0}
         run: |
           mkdir -p /tmp/artifacts
-          find . -name "curl*.exe" -type f -exec cp {} /tmp/artifacts/ \;
-          find . -name "*.dll" -type f -exec cp {} /tmp/artifacts/ \;
-          ls -la /tmp/artifacts/
-
-      - name: Upload artifacts  
+          cd curl-impersonate/build
+          # Copy built curl executables
+          find . -name "curl-impersonate-*" -type f -exec cp {} /tmp/artifacts/ \; || true
+          find . -name "curl_chrome*" -type f -exec cp {} /tmp/artifacts/ \; || true
+          find . -name "curl_edge*" -type f -exec cp {} /tmp/artifacts/ \; || true
+          # Also check in install location
+          find /mingw64/bin -name "curl-impersonate-*" -type f -exec cp {} /tmp/artifacts/ \; 2>/dev/null || true
+          find /mingw64/bin -name "curl_chrome*" -type f -exec cp {} /tmp/artifacts/ \; 2>/dev/null || true
+          ls -lah /tmp/artifacts/
+          
+      - name: Upload Chrome artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: curl-impersonate-windows-msys2
+          name: curl-impersonate-chrome-windows
           path: D:\a\_temp\msys64\tmp\artifacts\
+          if-no-files-found: error
 

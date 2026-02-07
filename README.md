@@ -13,23 +13,29 @@ This makes it useful for web scraping and automation tasks where websites might 
 
 ## Features
 
-- Automated builds using GitHub Actions
+- Automated builds using GitHub Actions via MSYS2
 - Two build variants:
-  - **Chrome variant**: Built with BoringSSL (Chrome's SSL library)
-  - **Firefox variant**: Built with MSYS2/MinGW
+  - **Chrome variant**: Includes curl_chrome*, curl_edge*, and curl_safari* executables
+  - **Firefox variant**: Includes curl_ff* executables (Firefox impersonation)
 - Pre-compiled Windows executables available as artifacts
 - No local build environment required
+- Builds take approximately 30-60 minutes
 
 ## Getting Started
 
 ### Download Pre-built Binaries
 
-1. Go to the [Actions tab](../../actions)
+> **⏱️ Build Time**: Each variant takes approximately 30-60 minutes to build. Please be patient!
+
+1. Go to the [Actions tab](../../actions/workflows/build-curl-impersonate.yml)
 2. Click on the "Build curl-impersonate for Windows" workflow
-3. Click "Run workflow" to trigger a new build
-4. Once complete, download the artifacts:
-   - `curl-impersonate-windows` - Chrome variant
-   - `curl-impersonate-windows-msys2` - Firefox variant
+3. Click the green "Run workflow" button to trigger a new build
+4. Wait for the build to complete (you'll see a green checkmark when done)
+5. Click on the completed workflow run
+6. Scroll down to the **"Artifacts"** section at the bottom of the page
+7. Download the artifacts you need:
+   - `curl-impersonate-chrome-windows` - Chrome/Edge/Safari variants
+   - `curl-impersonate-firefox-windows` - Firefox variants
 
 ### Local Build (Advanced)
 
@@ -50,42 +56,58 @@ This script will install the necessary dependencies and build curl-impersonate o
 
 ## Usage
 
-After downloading the built executable:
+After downloading and extracting the artifact ZIP files, you'll have multiple curl executables:
 
+**Chrome Variant:**
 ```cmd
-# Basic usage (impersonate Chrome)
-curl-impersonate-chrome.exe https://example.com
+# Impersonate Chrome 116
+curl_chrome116.exe https://example.com
 
-# Save output to file
-curl-impersonate-chrome.exe https://example.com -o output.html
+# Impersonate Chrome 110
+curl_chrome110.exe https://example.com
 
-# Include headers
-curl-impersonate-chrome.exe -I https://example.com
+# Impersonate Edge 101
+curl_edge101.exe https://example.com
 
-# Use with specific Chrome version
-curl-impersonate-chrome.exe --impersonate chrome110 https://example.com
+# Impersonate Safari 15.5
+curl_safari15_5.exe https://example.com
 ```
 
-For more information on available options, see the [curl-impersonate documentation](https://github.com/lwthiker/curl-impersonate).
+**Firefox Variant:**
+```cmd
+# Impersonate Firefox 109
+curl_ff109.exe https://example.com
+
+# Impersonate Firefox 102
+curl_ff102.exe https://example.com
+
+# Impersonate Firefox 98
+curl_ff98.exe https://example.com
+```
+
+For more options and examples, see the [Usage Guide](docs/USAGE.md).
 
 ## Build Process
 
-The GitHub Actions workflow performs the following steps:
+The GitHub Actions workflow uses MSYS2 (a Unix-like environment for Windows) to build curl-impersonate using the official build method:
 
-### Chrome Variant (BoringSSL)
-1. Installs build tools (NASM, Perl, CMake, Ninja, Go)
-2. Clones curl-impersonate repository
-3. Builds BoringSSL
-4. Builds nghttp2
-5. Builds curl with impersonation patches
-6. Packages the executable
+### Firefox Variant Build
+1. Sets up MSYS2 with MinGW64 toolchain
+2. Installs dependencies (NSS, Python, gyp-next, etc.)
+3. Clones curl-impersonate repository  
+4. Runs `configure` and `make firefox-build`
+5. Collects all `curl_ff*` executables
+6. Packages as `curl-impersonate-firefox-windows` artifact
 
-### Firefox Variant (MSYS2)
-1. Sets up MSYS2 environment
-2. Installs MinGW toolchain
+### Chrome Variant Build
+1. Sets up MSYS2 with MinGW64 toolchain
+2. Installs dependencies (Go, NASM, etc.)
 3. Clones curl-impersonate repository
-4. Builds using available build system
-5. Packages the executable
+4. Runs `configure` and `make chrome-build`
+5. Collects all `curl_chrome*`, `curl_edge*`, `curl_safari*` executables
+6. Packages as `curl-impersonate-chrome-windows` artifact
+
+**⚠️ Note**: Building on Windows is complex and time-consuming. The process uses MSYS2 because curl-impersonate doesn't have native Windows build scripts - it requires a Unix-like build environment.
 
 ## Contributing
 
