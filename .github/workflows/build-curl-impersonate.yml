@@ -1,1 +1,154 @@
+name: Build curl-impersonate for Windows
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  build-chrome:
+    name: Build curl-impersonate (Chrome/BoringSSL) for Windows
+    runs-on: windows-latest
+    
+    steps:
+      - name: Install build tools
+        run: |
+          choco install nasm strawberryperl cmake ninja golang -y
+          echo "C:\Program Files\NASM" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
+          echo "C:\Strawberry\perl\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
+          echo "C:\Program Files\Go\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
+
+      - name: Clone curl-impersonate
+        run: |
+          git clone --depth 1 https://github.com/lwthiker/curl-impersonate.git
+          cd curl-impersonate
+          git submodule update --init --depth 1
+
+      - name: Build BoringSSL
+        shell: cmd
+        run: |
+          cd curl-impersonate
+          mkdir build-boringssl && cd build-boringssl
+          cmake -GNinja -DCMAKE_BUILD_TYPE=Release ..\curl-impersonate\boringssl 2>nul || cmake -GNinja -DCMAKE_BUILD_TYPE=Release ..\boringssl
+          ninja crypto ssl
+
+      - name: Build nghttp2
+        shell: cmd
+        run: |
+          cd curl-impersonate
+          mkdir build-nghttp2 && cd build-nghttp2
+          cmake -GNinja -DCMAKE_BUILD_TYPE=Release -DENABLE_LIB_ONLY=ON -DENABLE_STATIC_LIB=ON ..\nghttp2
+          ninja
+
+      - name: Build curl with impersonate patches
+        shell: cmd
+        run: |
+          cd curl-impersonate\curl
+          buildconf.bat
+          cmake -GNinja -DCMAKE_BUILD_TYPE=Release ^
+            -DCURL_USE_OPENSSL=ON ^
+            -DOPENSSL_ROOT_DIR=..\build-boringssl ^
+            -DUSE_NGHTTP2=ON ^
+            -DNGHTTP2_LIBRARY=..\build-nghttp2\lib ^
+            -DNGHTTP2_INCLUDE_DIR=..\nghttp2\lib\includes ^
+            -DBUILD_SHARED_LIBS=OFF ^
+            -DCURL_DISABLE_LDAP=ON ^
+            -DCURL_STATICLIB=ON ^
+            .
+          ninja
+
+      - name: Collect artifacts
+        run: |
+          mkdir artifacts
+          # Copy whatever was produced
+          Get-ChildItem -Path curl-impersonate -Recurse -Filter "curl.exe" | Copy-Item -Destination artifacts\curl-impersonate-chrome.exe
+          Get-ChildItem -Path curl-impersonate -Recurse -Filter "*.dll" | Copy-Item -Destination artifacts\
+          echo "=== Artifacts ==="
+          Get-ChildItem artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: curl-impersonate-windows
+          path: artifacts/
+
+  build-alternative:
+    name: Build via MSYS2 (Firefox variant)
+    runs-on: windows-latest
+
+    steps:
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-go
+            mingw-w64-x86_64-nasm
+            make
+            autoconf
+            automake
+            libtool
+            pkg-config
+            perl
+            git
+            patch
+            unzip
+            wget
+
+      - name: Clone curl-impersonate
+        shell: msys2 {0}
+        run: |
+          git clone --depth 1 https://github.com/AaronLai/curl-impersonate-win.git || \
+          git clone --depth 1 https://github.com/lwthiker/curl-impersonate.git
+
+      - name: Build (MSYS2)
+        shell: msys2 {0}
+        run: |
+          cd curl-impersonate* 
+          # Try the Windows-specific build if available
+          if [ -f "build.bat" ]; then
+            echo "Using Windows build script..."
+            cmd //c build.bat
+          elif [ -f "configure" ] || [ -f "Makefile" ]; then
+            echo "Using autotools..."
+            mkdir -p build && cd build
+            ../configure --prefix=/mingw64
+            make -j$(nproc) chrome-build || make -j$(nproc)
+          else
+            echo "Building BoringSSL + curl manually..."
+            
+            # Build BoringSSL
+            cd boringssl || cd third_party/boringssl
+            mkdir build && cd build
+            cmake -GNinja -DCMAKE_BUILD_TYPE=Release ..
+            ninja crypto ssl
+            cd ../..
+            
+            # Build curl
+            cd curl || cd third_party/curl
+            mkdir build && cd build  
+            cmake -GNinja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCURL_USE_OPENSSL=ON \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DCURL_STATICLIB=ON \
+              ..
+            ninja
+          fi
+
+      - name: Collect and upload
+        shell: msys2 {0}
+        run: |
+          mkdir -p /tmp/artifacts
+          find . -name "curl*.exe" -type f -exec cp {} /tmp/artifacts/ \;
+          find . -name "*.dll" -type f -exec cp {} /tmp/artifacts/ \;
+          ls -la /tmp/artifacts/
+
+      - name: Upload artifacts  
+        uses: actions/upload-artifact@v4
+        with:
+          name: curl-impersonate-windows-msys2
+          path: D:\a\_temp\msys64\tmp\artifacts\
 
